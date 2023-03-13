@@ -44,6 +44,7 @@ int main(int argc, char** argv)
 	int clientCount(0);
 
 	// минус почему то не с каждым запуском работает??!
+	// не каждый раз считает до 0?
 	std::thread t1(client, std::ref(clientCount));
 	std::thread t2(operat, std::ref(clientCount));
 	t1.join();
