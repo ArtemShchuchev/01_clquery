@@ -1,5 +1,7 @@
 ﻿#include <chrono>
 #include <thread>
+#include <mutex>
+#include <atomic>
 #include "SecondaryFunction.h"
 
 /*
@@ -13,39 +15,37 @@
 клиентов и уменьшает его на 1. «Операционист» работает до последнего клиента.
 */
 
-void client(int& n)
+//std::mutex m;
+std::atomic<int> clientCount(0);
+
+void client()
 {
-	using namespace std::chrono_literals;
 	std::wcout << L"Номер потока cl++: " << std::this_thread::get_id() << "\n";
 
 	do
 	{
-		std::this_thread::sleep_for(1s);
-		++n;
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		//std::lock_guard<std::mutex> grd(m);
+		clientCount.fetch_add(1);
 		consoleCol(col::br_green);
-		std::wcout << L"Клиент +1: " << n << "\n";
+		std::wcout << L"Клиент +1: " << clientCount.load() << "\n";
 		consoleCol(col::cancel);
-	} while (n < 5);
+	} while (clientCount.load() < 5);
 }
-void operat(int& n)
+void operat()
 {
-	using namespace std::chrono_literals;
-	std::wcout << L"Номер потока op--: " << std::this_thread::get_id();
-	if (n == 0)	// по большому счету - это условие можно убрать, т.к. оно 100% выполнится
-	{
-		std::wcout << L"... Упс, придержу поток!\n";
-		std::this_thread::sleep_for(100ms); // теперь "клиент" успеет 2жды плюсануть
-	}
-	else std::wcout << "\n";
+	std::wcout << L"Номер потока op--: " << std::this_thread::get_id() << "\n";
 
+	std::this_thread::sleep_for(std::chrono::milliseconds(100)); // теперь "клиент" успеет 2жды плюсануть
 	do
 	{
-		std::this_thread::sleep_for(2s);
-		--n;
+		std::this_thread::sleep_for(std::chrono::seconds(2));
+		//std::lock_guard<std::mutex> grd(m);
+		clientCount.fetch_sub(1);
 		consoleCol(col::br_cyan);
-		std::wcout << L"Клиент -1: " << n << "\n";
+		std::wcout << L"Клиент -1: " << clientCount.load() << "\n";
 		consoleCol(col::cancel);
-	} while (n > 0);
+	} while (clientCount.load() > 0);
 }
 
 int main(int argc, char** argv)
@@ -55,15 +55,8 @@ int main(int argc, char** argv)
 	std::wcout << L"Кол-во аппаратных вычислителей: " << std::thread::hardware_concurrency() << "\n";
 	std::wcout << L"Номер потока main: " << std::this_thread::get_id() << "\n";
 
-	int clientCount(0);
-
-	// минус почему то не с каждым запуском работает??!
-	// не каждый раз считает до 0?
-	//
-	// разобрался!!! и добавил задержку, на случай если
-	// первым запустился поток "operatora"
-	std::thread t1(client, std::ref(clientCount));
-	std::thread t2(operat, std::ref(clientCount));
+	std::thread t1(client);
+	std::thread t2(operat);
 	t1.join();
 	t2.join();
 	
