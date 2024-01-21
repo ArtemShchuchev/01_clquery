@@ -15,38 +15,11 @@
 клиентов и уменьшает его на 1. «Операционист» работает до последнего клиента.
 */
 
-//std::mutex m;
+std::mutex iomutex;
 std::atomic<int> clientCount(0);
 
-void client()
-{
-	std::wcout << L"Номер потока cl++: " << std::this_thread::get_id() << "\n";
-
-	do
-	{
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-		//std::lock_guard<std::mutex> grd(m);
-		clientCount.fetch_add(1);
-		consoleCol(col::br_green);
-		std::wcout << L"Клиент +1: " << clientCount.load() << "\n";
-		consoleCol(col::cancel);
-	} while (clientCount.load() < 5);
-}
-void operat()
-{
-	std::wcout << L"Номер потока op--: " << std::this_thread::get_id() << "\n";
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(100)); // теперь "клиент" успеет 2жды плюсануть
-	do
-	{
-		std::this_thread::sleep_for(std::chrono::seconds(2));
-		//std::lock_guard<std::mutex> grd(m);
-		clientCount.fetch_sub(1);
-		consoleCol(col::br_cyan);
-		std::wcout << L"Клиент -1: " << clientCount.load() << "\n";
-		consoleCol(col::cancel);
-	} while (clientCount.load() > 0);
-}
+static void client();
+static void operat();
 
 int main(int argc, char** argv)
 {
@@ -57,10 +30,52 @@ int main(int argc, char** argv)
 
 	std::thread t1(client);
 	std::thread t2(operat);
-	t1.join();
+	t1.detach();
 	t2.join();
 	
 	std::wcout << "\n";
 
 	return 0;
+}
+
+
+static void client()
+{
+	iomutex.lock();
+	consoleCol(col::br_green);
+	std::wcout << L"Номер потока cl++: " << std::this_thread::get_id() << "\n";
+	consoleCol(col::cancel);
+	iomutex.unlock();
+
+	do
+	{
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		
+		std::lock_guard<std::mutex> grd(iomutex);
+		clientCount.fetch_add(1);
+		consoleCol(col::br_green);
+		std::wcout << L"Клиент +1: " << clientCount.load() << "\n";
+		consoleCol(col::cancel);
+	} while (clientCount.load() < 5);
+}
+
+static void operat()
+{
+	iomutex.lock();
+	consoleCol(col::br_cyan);
+	std::wcout << L"Номер потока op--: " << std::this_thread::get_id() << "\n";
+	consoleCol(col::cancel);
+	iomutex.unlock();
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(600)); // теперь "клиент" успеет 2жды плюсануть
+	do
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+		std::lock_guard<std::mutex> grd(iomutex);
+		clientCount.fetch_sub(1);
+		consoleCol(col::br_cyan);
+		std::wcout << L"Клиент -1: " << clientCount.load() << "\n";
+		consoleCol(col::cancel);
+	} while (clientCount.load() > 0);
 }
